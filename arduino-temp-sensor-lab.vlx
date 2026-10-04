@@ -1,0 +1,108 @@
+{
+  "format": "velxio-project",
+  "version": 1,
+  "exportedAt": "2026-09-29T19:34:14.116Z",
+  "name": "arduino-temp-sensor-lab",
+  "boards": [
+    {
+      "id": "arduino-uno",
+      "boardKind": "arduino-uno",
+      "x": 60,
+      "y": 60,
+      "activeFileGroupId": "group-arduino-uno",
+      "languageMode": "arduino",
+      "serialBaudRate": 9600
+    }
+  ],
+  "fileGroups": {
+    "group-arduino-uno": [
+      {
+        "name": "sketch.ino",
+        "content": "// Temperature Sensor Reliability Lab  (Velxio, Arduino Uno + NTC temperature sensor on A0)\n//\n// Sensor model: 10 kOhm NTC thermistor (Beta = 3950) in series with a 10 kOhm resistor,\n// output on OUT -> A0. Conversion uses the Beta equation for that divider.\n// (The previous version applied a TMP36 formula, which does not match this sensor:\n//  at a true 72 C it reported about 20.7 C and labeled it \"OK\".)\n//\n// Output (CSV over Serial, 9600 baud):\n//   sample,timestamp_ms,raw_adc,temperature_c,unit,status,sim_note\n// status   = what the board itself can tell: OK, OUT_OF_SPEC, SENSOR_FAULT, NO_DATA\n// sim_note = labels every condition this sketch injects on purpose, so the raw file is honest.\n//            The analysis rule in analyze.py does NOT read this column.\n\n#include <math.h>\n\nconst int SENSOR_PIN = A0;\nconst float BETA = 3950.0;              // must match the sensor's beta attribute\nconst int TOTAL_SAMPLES = 120;          // stop after this many rows\nconst unsigned long INTERVAL_MS = 500;  // 2 readings per second -> about 60 s run\n\n// The simulator's ADC is ideal (no electrical noise). A real 10-bit ADC typically\n// wanders by 1-2 counts, so +/-2 counts of noise are added to make normal variation visible.\nconst bool ADD_ADC_NOISE = true;\nconst bool INJECT_FAULTS = true;        // spikes, a dropout and a short circuit (see schedule below)\n\nconst float SPEC_MIN_C = -40.0;         // NTC module operating range\nconst float SPEC_MAX_C = 125.0;\n\nint sample = 1;\nbool finished = false;\n\nfloat adcToCelsius(int raw) {\n  // Beta equation: 1/T = ln(R/R0)/BETA + 1/T0, with R/R0 = 1 / (1023/raw - 1)\n  return 1.0 / (log(1.0 / (1023.0 / raw - 1.0)) / BETA + 1.0 / 298.15) - 273.15;\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  randomSeed(42);  // repeatable noise\n  Serial.println(\"sample,timestamp_ms,raw_adc,temperature_c,unit,status,sim_note\");\n}\n\nvoid loop() {\n  if (sample > TOTAL_SAMPLES) {\n    if (!finished) { Serial.println(\"# DONE\"); finished = true; }\n    return;\n  }\n\n  unsigned long t = millis();\n  String note = \"\";\n\n  // ---- Simulated dropout: no reading arrives (e.g. loose wire, bus timeout) ----\n  if (INJECT_FAULTS && sample >= 45 && sample <= 47) {\n    Serial.print(sample); Serial.print(\",\"); Serial.print(t);\n    Serial.println(\",,,C,NO_DATA,injected_dropout\");\n    sample++;\n    delay(INTERVAL_MS);\n    return;\n  }\n\n  int raw = analogRead(SENSOR_PIN);\n  if (ADD_ADC_NOISE) raw = constrain(raw + random(-2, 3), 0, 1023);\n\n  // ---- Simulated electrical spikes (one sample each) ----\n  if (INJECT_FAULTS && (sample == 30 || sample == 88)) { raw = constrain(raw - 150, 0, 1023); note = \"injected_spike\"; }\n  if (INJECT_FAULTS && sample == 61)                   { raw = constrain(raw + 150, 0, 1023); note = \"injected_spike\"; }\n  // ---- Simulated short circuit for two samples (ADC pinned at the rail) ----\n  if (INJECT_FAULTS && (sample == 100 || sample == 101)) { raw = 1023; note = \"injected_short\"; }\n\n  float tempC = adcToCelsius(raw);\n  String status;\n  if (raw <= 5 || raw >= 1018) {\n    status = \"SENSOR_FAULT\";            // divider pinned to a rail: open or shorted sensor\n  } else if (tempC < SPEC_MIN_C || tempC > SPEC_MAX_C) {\n    status = \"OUT_OF_SPEC\";\n  } else {\n    status = \"OK\";\n  }\n\n  Serial.print(sample);        Serial.print(\",\");\n  Serial.print(t);             Serial.print(\",\");\n  Serial.print(raw);           Serial.print(\",\");\n  Serial.print(tempC, 2);      Serial.print(\",C,\");\n  Serial.print(status);        Serial.print(\",\");\n  Serial.println(note);\n\n  sample++;\n  delay(INTERVAL_MS);\n}\n"
+      }
+    ]
+  },
+  "components": [
+    {
+      "id": "ntc_temperature_sensor_1790710258269_unh66xt3w",
+      "metadataId": "ntc-temperature-sensor",
+      "x": 52,
+      "y": 398,
+      "properties": {
+        "temperature": 24
+      }
+    }
+  ],
+  "wires": [
+    {
+      "id": "wire-1790710300117",
+      "start": {
+        "componentId": "arduino-uno",
+        "pinName": "5V",
+        "x": 220,
+        "y": 251.5
+      },
+      "end": {
+        "componentId": "ntc_temperature_sensor_1790710258269_unh66xt3w",
+        "pinName": "VCC",
+        "x": 193,
+        "y": 439.8
+      },
+      "waypoints": [
+        {
+          "x": 220,
+          "y": 439.8
+        }
+      ],
+      "color": "#cc0000",
+      "autoRouted": true
+    },
+    {
+      "id": "wire-1790710314845",
+      "start": {
+        "componentId": "arduino-uno",
+        "pinName": "GND.3",
+        "x": 239,
+        "y": 251.5
+      },
+      "end": {
+        "componentId": "ntc_temperature_sensor_1790710258269_unh66xt3w",
+        "pinName": "GND",
+        "x": 193,
+        "y": 430.2
+      },
+      "waypoints": [
+        {
+          "x": 193,
+          "y": 251.5
+        }
+      ],
+      "color": "#000000",
+      "autoRouted": true
+    },
+    {
+      "id": "wire-1790710323389",
+      "start": {
+        "componentId": "arduino-uno",
+        "pinName": "A0",
+        "x": 268,
+        "y": 251.5
+      },
+      "end": {
+        "componentId": "ntc_temperature_sensor_1790710258269_unh66xt3w",
+        "pinName": "OUT",
+        "x": 193,
+        "y": 449.5
+      },
+      "waypoints": [
+        {
+          "x": 268,
+          "y": 449.5
+        }
+      ],
+      "color": "#22c55e",
+      "autoRouted": true
+    }
+  ],
+  "activeBoardId": "arduino-uno"
+}
